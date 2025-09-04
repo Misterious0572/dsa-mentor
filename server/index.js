@@ -1,4 +1,3 @@
-// ADD THIS LINE AT THE VERY TOP
 require('dotenv').config(); 
 
 const express = require("express");
@@ -15,6 +14,7 @@ const curriculumRoutes = require("./routes/curriculum");
 const { authenticateSocket } = require("./middleware/auth");
 
 const app = express();
+app.set('trust proxy', 1); // FIX: Add this line to trust Render's proxy
 
 // Security (relax CSP for Vite dev)
 app.use(
@@ -23,17 +23,21 @@ app.use(
   })
 );
 
-// FIX #1: DYNAMIC CORS ORIGIN
-// This will allow your live Vercel URL (which you'll set later)
-// and your local dev server to connect.
+// DYNAMIC CORS ORIGIN (with debugging)
 const allowedOrigins = [
-  process.env.FRONTEND_URL, // You will set this on Render
+  process.env.FRONTEND_URL,
   "http://localhost:5173"
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
+      console.log('--- CORS CHECK ---');
+      console.log('Request Origin:', origin);
+      console.log('Allowed Frontend URL:', process.env.FRONTEND_URL);
+      console.log('Is Origin Allowed?:', allowedOrigins.indexOf(origin) !== -1);
+      console.log('--- END CORS CHECK ---');
+
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
@@ -48,9 +52,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// FIX #2: DYNAMIC MONGO CONNECTION
-// It will use your Render environment variable, but fall back to localhost
-// if it can't find it (so it still works on your machine).
+// DYNAMIC MONGO CONNECTION
 const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017/dsa-mentor";
 
 mongoose
@@ -60,13 +62,14 @@ mongoose
 
 // Rate limit ONLY auth routes (not global)
 const authLimiter = rateLimit({
-  windowMs: 60 * 1000,         // 1 minute
-  max: 5,                      // 5 attempts per IP/min
+  windowMs: 60 * 1000,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many login/register attempts. Try again later." },
 });
 
+// ... (The rest of your file is unchanged)
 // Routes
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/progress", progressRoutes);
