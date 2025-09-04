@@ -1,3 +1,6 @@
+// ADD THIS LINE AT THE VERY TOP
+require('dotenv').config(); 
+
 const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
@@ -20,10 +23,23 @@ app.use(
   })
 );
 
-// CORS for client
+// FIX #1: DYNAMIC CORS ORIGIN
+// This will allow your live Vercel URL (which you'll set later)
+// and your local dev server to connect.
+const allowedOrigins = [
+  process.env.FRONTEND_URL, // You will set this on Render
+  "http://localhost:5173"
+];
+
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
@@ -32,9 +48,13 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Mongo
+// FIX #2: DYNAMIC MONGO CONNECTION
+// It will use your Render environment variable, but fall back to localhost
+// if it can't find it (so it still works on your machine).
+const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017/dsa-mentor";
+
 mongoose
-  .connect("mongodb://localhost:27017/dsa-mentor")
+  .connect(mongoUri)
   .then(() => console.log("✅ Connected to MongoDB"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
@@ -59,10 +79,19 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || "Internal server error" });
 });
 
-// Socket.io
+// Socket.io (using the same dynamic origin logic)
 const server = http.createServer(app);
 const io = socketIo(server, {
-  cors: { origin: "http://localhost:5173", methods: ["GET", "POST"] },
+  cors: { 
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    }, 
+    methods: ["GET", "POST"] 
+  },
 });
 
 io.use(authenticateSocket);
